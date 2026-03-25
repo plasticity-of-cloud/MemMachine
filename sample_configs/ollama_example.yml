@@ -1,0 +1,107 @@
+# MemMachine Configuration - Ollama Example (Docker Compose)
+# This configuration is designed for Docker Compose deployment
+
+# Logging configuration
+logging:
+  path: /tmp/memory_log
+  level: info  # Options: debug | info | error
+
+# Default embedder (must reference an embedder defined below)
+default_embedder: ollama_embedder
+
+# Long-term memory configuration
+long_term_memory:
+  embedder: ollama_embedder
+  reranker: hybrid_reranker
+  vector_graph_store: neo4j_store
+  database: profile_storage
+
+# Session database (SQLite for development, PostgreSQL for production)
+SessionDB:
+  uri: sqlite:///sessions.db
+  # For PostgreSQL in Docker: uri: postgresql://memmachine:memmachine_password@postgres/memmachine
+
+# Language Models (Ollama)
+Model:
+  ollama_model:
+    model_vendor: openai-compatible  # Required for Ollama
+    model: phi4-mini                 # Change to your preferred Ollama model
+    api_key: EMPTY                   # Ollama doesn't need API key
+    base_url: http://host.docker.internal:11434/v1  # Access host Ollama from container
+
+# Storage (PostgreSQL with pgvector)
+storage:
+  profile_storage:
+    vendor_name: postgres
+    host: postgres  # Docker Compose service name (NOT localhost)
+    port: 5432
+    user: memmachine
+    db_name: memmachine
+    password: ${POSTGRES_PASSWORD}  # Use environment variable
+
+# Profile memory configuration
+profile_memory:
+  llm_model: ollama_model
+  embedding_model: ollama_embedder
+  database: profile_storage
+  prompt: profile_prompt
+
+# Session memory configuration
+sessionMemory:
+  model_name: ollama_model
+  message_capacity: 500
+  max_message_length: 16000
+  max_token_num: 8000
+
+# Embedders (Ollama)
+embedder:
+  ollama_embedder:
+    provider: openai  # Required for Ollama
+    config:
+      model: nomic-embed-text  # Ollama embedding model
+      api_key: EMPTY
+      base_url: http://host.docker.internal:11434/v1  # Access host Ollama from container
+      dimensions: 768  # nomic-embed-text dimensions
+
+# Rerankers
+reranker:
+  # Hybrid reranker (best quality, slower)
+  hybrid_reranker:
+    provider: rrf-hybrid
+    config:
+      reranker_ids:
+        - embedder_reranker
+        - bm25_reranker
+  
+  # Embedder-based reranker
+  embedder_reranker:
+    provider: embedder
+    config:
+      embedder_id: ollama_embedder
+  
+  # BM25 keyword reranker
+  bm25_reranker:
+    provider: bm25
+
+# Vector graph store (Neo4j)
+vector_graph_store:
+  neo4j_store:
+    provider: neo4j
+    config:
+      uri: bolt://neo4j:7687  # Docker Compose service name (NOT localhost)
+      username: neo4j
+      password: ${NEO4J_PASSWORD}  # Use environment variable
+
+# Docker Compose Networking Notes:
+# - Containers communicate using service names as hostnames
+# - postgres service → host: postgres
+# - neo4j service → uri: bolt://neo4j:7687
+# - Ollama on host machine → http://host.docker.internal:11434/v1
+# - localhost only works for services within the SAME container
+#
+# Setup:
+# 1. Ensure Ollama is running on host: ollama serve
+# 2. Pull required models: ollama pull phi4-mini && ollama pull nomic-embed-text
+# 3. Set environment variables in .env file
+# 4. Validate with: python3 tools/validate_config_simple.py sample_configs/ollama_example.yml
+# 5. Start services: docker-compose up -d
