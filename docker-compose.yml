@@ -64,6 +64,8 @@ services:
     restart: unless-stopped
     ports:
       - "${MEMORY_SERVER_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Database configuration
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
@@ -104,8 +106,6 @@ services:
       start_period: 60s
     networks:
       - memmachine-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   docs:
     build:
